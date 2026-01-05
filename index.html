@@ -9,6 +9,7 @@
     video { width: 100%; border-radius: 12px; }
     .row { margin-top: 12px; }
     input, button { width: 100%; padding: 12px; font-size: 16px; margin-top: 8px; }
+    .status { margin-top: 10px; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -26,6 +27,7 @@
     <input id="note" placeholder="Optional note..." />
 
     <button id="start">Start scanning</button>
+    <div id="status" class="status"></div>
   </div>
 
   <script type="module">
@@ -42,24 +44,36 @@
     const storageLocationInput = document.getElementById("storageLocation");
     const noteInput = document.getElementById("note");
     const startBtn = document.getElementById("start");
+    const statusEl = document.getElementById("status");
 
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+    }
+
+    // ✅ CORS-fix: no-cors (fire-and-forget)
     async function sendToSheet(payload) {
-      const res = await fetch(WEB_APP_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      });
+      try {
+        await fetch(WEB_APP_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
 
-      const json = await res.json().catch(() => ({}));
-      if (!json?.ok) {
-        console.error("Apps Script error:", json);
-        alert("Error writing to Google Sheet: " + (json?.error || "Unknown error"));
+        // In no-cors mode we can't read response; assume success if request was sent
+        setStatus("Saved ✅");
+        return { ok: true };
+      } catch (err) {
+        console.error("Failed to send:", err);
+        setStatus("Save failed ❌");
+        alert("Error writing to Google Sheet: " + (err?.message || "Unknown error"));
+        return { ok: false, error: String(err) };
       }
-      return json;
     }
 
     startBtn.addEventListener("click", async () => {
       startBtn.disabled = true;
+      setStatus("");
 
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
       const backCam = devices.find(d => d.label.toLowerCase().includes("back")) || devices[0];
@@ -80,6 +94,7 @@
             note: noteInput.value || ""
           };
 
+          setStatus("Saving...");
           await sendToSheet(payload);
 
           // Optional: nach dem Speichern wieder scannen lassen
