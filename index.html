@@ -10,6 +10,7 @@
     .row { margin-top: 12px; }
     input, button { width: 100%; padding: 12px; font-size: 16px; margin-top: 8px; }
     .status { margin-top: 10px; font-size: 14px; }
+    iframe { display:none; }
   </style>
 </head>
 <body>
@@ -30,10 +31,20 @@
     <div id="status" class="status"></div>
   </div>
 
+  <!-- Hidden form post target -->
+  <iframe name="hidden_iframe"></iframe>
+
+  <form id="postForm" target="hidden_iframe" method="POST"
+        action="https://script.google.com/macros/s/AKfycbzK8ezF3e_ORm3cGuqS70NjyM4sov1jsYTQEzNeXlFaaWG0SCDY7PIGe1I_i6t6HnCHSQ/exec">
+    <input type="hidden" name="barcode" id="f_barcode" />
+    <input type="hidden" name="material" id="f_material" />
+    <input type="hidden" name="stock" id="f_stock" />
+    <input type="hidden" name="storageLocation" id="f_storageLocation" />
+    <input type="hidden" name="note" id="f_note" />
+  </form>
+
   <script type="module">
     import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
-
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzK8ezF3e_ORm3cGuqS70NjyM4sov1jsYTQEzNeXlFaaWG0SCDY7PIGe1I_i6t6HnCHSQ/exec";
 
     const codeReader = new BrowserMultiFormatReader();
     const video = document.getElementById("video");
@@ -46,21 +57,27 @@
     const startBtn = document.getElementById("start");
     const statusEl = document.getElementById("status");
 
+    const postForm = document.getElementById("postForm");
+    const f_barcode = document.getElementById("f_barcode");
+    const f_material = document.getElementById("f_material");
+    const f_stock = document.getElementById("f_stock");
+    const f_storageLocation = document.getElementById("f_storageLocation");
+    const f_note = document.getElementById("f_note");
+
     function setStatus(msg) {
       statusEl.textContent = msg;
     }
 
-    // ✅ CORS-fix: no-cors (fire-and-forget)
+    // ✅ CORS-sichere Übertragung per hidden form submit
     async function sendToSheet(payload) {
       try {
-        await fetch(WEB_APP_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify(payload)
-        });
+        f_barcode.value = payload.barcode || "";
+        f_material.value = payload.material || "";
+        f_stock.value = String(payload.stock ?? 1);
+        f_storageLocation.value = payload.storageLocation || "";
+        f_note.value = payload.note || "";
 
-        // In no-cors mode we can't read response; assume success if request was sent
+        postForm.submit();
         setStatus("Saved ✅");
         return { ok: true };
       } catch (err) {
@@ -97,7 +114,7 @@
           setStatus("Saving...");
           await sendToSheet(payload);
 
-          // Optional: nach dem Speichern wieder scannen lassen
+          // wieder starten erlauben
           startBtn.disabled = false;
         }
       });
