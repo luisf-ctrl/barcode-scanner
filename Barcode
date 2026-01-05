@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Barcode Scanner</title>
+  <style>
+    body { font-family: system-ui; padding: 16px; }
+    video { width: 100%; border-radius: 12px; }
+    .row { margin-top: 12px; }
+    input, button { width: 100%; padding: 12px; font-size: 16px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h2>Barcode Scanner</h2>
+
+  <video id="video" playsinline></video>
+
+  <div class="row">
+    <label>Last scanned</label>
+    <input id="barcode" readonly placeholder="Scan a barcode..." />
+    <input id="note" placeholder="Optional note..." />
+    <button id="start">Start scanning</button>
+  </div>
+
+  <script type="module">
+    import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
+
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzErT2KMcoysmXHYO-d400ViFyZLBTrdMMhBRbDr5MJemlj6XCU-edaQDD1HYrKQKRgLA/exec"; // <-- hier einsetzen
+
+    const codeReader = new BrowserMultiFormatReader();
+    const video = document.getElementById("video");
+    const barcodeInput = document.getElementById("barcode");
+    const noteInput = document.getElementById("note");
+    const startBtn = document.getElementById("start");
+
+    async function sendToSheet(barcode, note="") {
+      const res = await fetch(WEB_APP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ barcode, note, user: "mobile" })
+      });
+      return res.json().catch(() => ({}));
+    }
+
+    startBtn.addEventListener("click", async () => {
+      startBtn.disabled = true;
+
+      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+      const backCam = devices.find(d => d.label.toLowerCase().includes("back")) || devices[0];
+
+      codeReader.decodeFromVideoDevice(backCam?.deviceId, video, async (result, err) => {
+        if (result) {
+          const code = result.getText();
+          barcodeInput.value = code;
+
+          // optional: Scan stoppen, damit nicht mehrfach feuert
+          codeReader.reset();
+
+          // direkt speichern
+          await sendToSheet(code, noteInput.value);
+
+          // wieder starten für nächsten Scan (wenn du “Dauerbetrieb” willst)
+          startBtn.disabled = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
