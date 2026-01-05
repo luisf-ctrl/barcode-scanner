@@ -19,28 +19,43 @@
   <div class="row">
     <label>Last scanned</label>
     <input id="barcode" readonly placeholder="Scan a barcode..." />
+
+    <input id="material" placeholder="Material (optional)" />
+    <input id="stock" type="number" inputmode="numeric" placeholder="Stock / Quantity" value="1" />
+    <input id="storageLocation" placeholder="Storage location (optional)" />
     <input id="note" placeholder="Optional note..." />
+
     <button id="start">Start scanning</button>
   </div>
 
   <script type="module">
     import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
 
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzErT2KMcoysmXHYO-d400ViFyZLBTrdMMhBRbDr5MJemlj6XCU-edaQDD1HYrKQKRgLA/exec"; // <-- hier einsetzen
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxENtVOGA6ORmJhrkzOXCXdW2WI6VfoRhfDdmihIRbVwGKJSw-wc8p5dJhwRRzfBIA4xg/exec";
 
     const codeReader = new BrowserMultiFormatReader();
     const video = document.getElementById("video");
+
     const barcodeInput = document.getElementById("barcode");
+    const materialInput = document.getElementById("material");
+    const stockInput = document.getElementById("stock");
+    const storageLocationInput = document.getElementById("storageLocation");
     const noteInput = document.getElementById("note");
     const startBtn = document.getElementById("start");
 
-    async function sendToSheet(barcode, note="") {
+    async function sendToSheet(payload) {
       const res = await fetch(WEB_APP_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ barcode, note, user: "mobile" })
+        body: JSON.stringify(payload)
       });
-      return res.json().catch(() => ({}));
+
+      const json = await res.json().catch(() => ({}));
+      if (!json?.ok) {
+        console.error("Apps Script error:", json);
+        alert("Error writing to Google Sheet: " + (json?.error || "Unknown error"));
+      }
+      return json;
     }
 
     startBtn.addEventListener("click", async () => {
@@ -49,18 +64,25 @@
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
       const backCam = devices.find(d => d.label.toLowerCase().includes("back")) || devices[0];
 
-      codeReader.decodeFromVideoDevice(backCam?.deviceId, video, async (result, err) => {
+      codeReader.decodeFromVideoDevice(backCam?.deviceId, video, async (result) => {
         if (result) {
           const code = result.getText();
           barcodeInput.value = code;
 
-          // optional: Scan stoppen, damit nicht mehrfach feuert
+          // Scan stoppen (verhindert Mehrfach-Trigger)
           codeReader.reset();
 
-          // direkt speichern
-          await sendToSheet(code, noteInput.value);
+          const payload = {
+            barcode: code,
+            material: materialInput.value || "",
+            stock: Number(stockInput.value || 1),
+            storageLocation: storageLocationInput.value || "",
+            note: noteInput.value || ""
+          };
 
-          // wieder starten für nächsten Scan (wenn du “Dauerbetrieb” willst)
+          await sendToSheet(payload);
+
+          // Optional: nach dem Speichern wieder scannen lassen
           startBtn.disabled = false;
         }
       });
